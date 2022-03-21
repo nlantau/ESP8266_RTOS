@@ -1,3 +1,6 @@
+// nlantau, 2022-03-21
+// MQTT -> 5V relay
+
 /* MQTT over SSL Example
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)
@@ -11,6 +14,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
+
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
@@ -21,6 +26,17 @@
 #include "mqtt_client.h"
 #include "esp_tls.h"
 #include "esp_ota_ops.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+
+#include "driver/gpio.h"
+
+
+#define GPIO_OUTPUT_IO_0    2
+#define GPIO_OUTPUT_PIN_SEL (1ULL << GPIO_OUTPUT_IO_0)
+
 
 static const char *TAG = "MQTTS_EXAMPLE";
 
@@ -43,11 +59,6 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             msg_id = esp_mqtt_client_subscribe(client, "/topic/qos0", 0);
             ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-            msg_id = esp_mqtt_client_subscribe(client, "/topic/qos1", 1);
-            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
-            ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -68,6 +79,15 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
+
+            if (event->data[0] == '1') {
+                gpio_set_level(GPIO_OUTPUT_IO_0, 1);
+                printf("First char is %c\n", event->data[0]);
+            } else if (event->data[0] == '0') {
+                gpio_set_level(GPIO_OUTPUT_IO_0, 0);
+                printf("First char is %c\n", event->data[0]);
+            }
+
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
@@ -124,11 +144,33 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
+    /* GPIO */
+    gpio_config_t io_conf;
+
+    /* Disable interrupt */
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+
+    /* Set as output mode */
+    io_conf.mode = GPIO_MODE_OUTPUT;
+
+    /* Bit mask selected pin */
+    io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
+
+    /* Disable pull-down and pull-up mode */
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+
+    /* Configure GPIO with the given settings */
+    gpio_config(&io_conf);
+
+
+
     ESP_ERROR_CHECK(example_connect());
 
     mqtt_app_start();
+    while(1) {
+        ESP_LOGI(TAG, "[DUMMY] testing...");
+        vTaskDelay(1000 / portTICK_RATE_MS);
+
+    }
 }
