@@ -168,9 +168,11 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     mqtt_app_start();
+    /*
     while(1) {
         ESP_LOGI(TAG, "[DUMMY] testing...");
         vTaskDelay(1000 / portTICK_RATE_MS);
 
     }
+    */
 }
